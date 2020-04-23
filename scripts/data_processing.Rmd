@@ -1,0 +1,161 @@
+---
+title: "Data processing"
+author: "AnnaClaire Marley"
+date: "4/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message = FALSE}
+# load packages
+library(tidyverse)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(ggplot2)
+library(maps)
+library(rgdal)
+library(raster)
+```
+
+This Rmarkdown:
+
+- imports layers of interest
+- crops and masks them to the area of interest and exprts them
+
+Area of Interest bounding box
+```{r aoi}
+# aoi shapefile
+aoi <- read_sf("../data/gulf_of_mexico_aoi/",
+                layer = "gulf_of_mexico_aoi-polygon")
+
+# assign projections 
+crs_aoi <- st_crs(aoi)
+
+```
+
+U.S. Exclusive Economic Zone
+```{r}
+
+# read in EEZ polygon
+us_eez <- read_sf("../data/FederalAndStateWaters/FederalAndStateWaters.gdb/", 
+                        layer = "FederalAndStateWaters")
+
+# filter to just federal waters, change the projection and crop to the aoi
+eez_gulf <- us_eez %>% 
+  filter(Jurisdicti == "Federal") %>% 
+  st_transform(crs_aoi) %>% 
+  st_crop(aoi)
+
+```
+
+
+U.S. Land Area
+```{r land_area}
+# grab map of us from nautralearthdata and bound to aoi
+us <- ne_countries(scale = 10, 
+                   country = "United States of America", 
+                   returnclass = "sf") %>% 
+  st_transform(crs_aoi) 
+
+# grab US states from maps package
+states <- st_as_sf(maps::map("state", plot = FALSE, fill = TRUE)) %>% 
+  st_transform(crs_aoi)
+
+gulf_crop <- st_crop(us, aoi)
+ggplot(gulf_crop) +
+  geom_sf()
+```
+
+Depth Data
+```{r}
+# Get depth data of the gulf 
+depth <- raster(paste0("../data/GEBCO_2019_21_Apr_2020_800d0264f91d/",
+                       "gebco_2019_n31.291637420654297_s17.777252197265625_w-100.55442810058594_e-78.51070404052734.tif"))
+
+# crop depth to EEZ
+depth_crop <- crop(depth, eez_gulf)
+
+# mask depth to EEz
+depth_mask <- mask(depth_crop, eez_gulf)
+
+
+```
+
+
+Create an Empty Raster Using Depth as a Template
+```{r}
+# Reclassification matrix for empty raster
+rcl_matrix <- c(-Inf, Inf, 0)
+
+# Reclassify the depth layer to make it an empty raster
+empty_raster <- reclassify(depth_mask, rcl= rcl_matrix)
+
+```
+
+Artificial Reefs
+```{r}
+# load artificial reefs from ocean reports
+artificial_reefs <- sf::st_read(dsn = "../data/ArtificialReefs/ArtificialReefs.gdb", 
+                                layer = "ArtificialReefs") %>% 
+  st_transform(crs_aoi)
+
+plot(artificial_reefs)
+
+# Rasterize artificial reefs
+#reefs_artificial_binary <- rasterize(artificial_reefs, empty_raster, field = 0, background = 1) %>%
+ # mask(eez_BRA)
+
+
+```
+
+Marine Protected Areas
+```{r}
+# read in MPAs
+mpa <- read_sf("../data/MPAI2017", layer = "MPAI_2017")
+
+# reproject
+mpa_project <- mpa %>% 
+  dplyr::select(Site_ID, Site_Name, Gov_Level, State) %>% 
+  st_transform(crs_aoi) %>% 
+  st_buffer(0)
+
+# Crop
+mpa_crop <- st_crop(mpa_project, aoi)
+
+# Rasterizing Steps for MPA Layer
+  # Create a Binary MPA Raster
+  mpas_binary <- rasterize(mpa_crop, empty_raster, field = 0, background = 1) %>% 
+    mask(eez_gulf)
+  
+  # Plot Reclassified MPA Layer
+  plot(mpas_binary)
+  #freq(mpas_binary)
+
+```
+
+
+Make initial map with vector data to see layers
+```{r}
+# map of gulf
+gulf_base <- us %>% 
+  ggplot() +
+  geom_sf() +
+  geom_sf(data = states) +
+  geom_sf(data = eez_gulf) +
+  geom_sf(data = artificial_reefs) +
+  coord_sf(xlim = c(-102.15, -74.12), ylim = c(20.65, 33.97), expand = FALSE) +
+  scale_fill_viridis_d(option = "plasma") +
+  theme(legend.position = "none", 
+        axis.title.x = element_blank(), 
+        axis.title.y = element_blank(), 
+        panel.background = element_rect(fill = "azure"), 
+        panel.border = element_rect(fill = NA)) 
+
+gulf_base
+```
+
+
