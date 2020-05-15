@@ -24,7 +24,17 @@ library(raster)
 This Rmarkdown:
 
 - imports layers of interest
-- crops and masks them to the area of interest and exprts them
+- reprojects, crops, and masks them to the area of interest 
+- If shapefile, reclassifies to raster with 1 for fill and 0 for not then exports as raster
+- exports them
+
+```{r}
+# set up path for saving files 
+
+path <- "../data/Active_Data_Layers/"
+
+```
+
 
 Area of Interest bounding box
 ```{r aoi}
@@ -37,18 +47,22 @@ crs_aoi <- st_crs(aoi)
 
 ```
 
-U.S. Exclusive Economic Zone
+
+EEZ 
 ```{r}
+# read in world eez
+eez <- read_sf(dsn = "../data/World_EEZ_v11_20191118/",
+               layer = "eez_v11")
 
-# read in EEZ polygon
-us_eez <- read_sf("../data/FederalAndStateWaters/FederalAndStateWaters.gdb/", 
-                        layer = "FederalAndStateWaters")
+# filter to us eez and reproject
+us_eez <- eez %>% 
+  filter(TERRITORY1 == "United States") %>% 
+  st_transform(crs_aoi)
 
-# filter to just federal waters, change the projection and crop to the aoi
-eez_gulf <- us_eez %>% 
-  filter(Jurisdicti == "Federal") %>% 
-  st_transform(crs_aoi) %>% 
-  st_crop(aoi)
+# crop to the gulf
+eez_gulf <- st_crop(us_eez, aoi)
+plot(eez_gulf$geometry)
+
 
 ```
 
@@ -70,18 +84,25 @@ ggplot(gulf_crop) +
   geom_sf()
 ```
 
+
+# Suitability Layers
+
 Depth Data
 ```{r}
 # Get depth data of the gulf 
-depth <- raster(paste0("../data/GEBCO_2019_21_Apr_2020_800d0264f91d/",
-                       "gebco_2019_n31.291637420654297_s17.777252197265625_w-100.55442810058594_e-78.51070404052734.tif"))
+depth <- raster("../data/GEBCO_2019_21_Apr_2020_800d0264f91d/",
+                       "gebco_2019_n31.291637420654297_s17.777252197265625_w-100.55442810058594_e-78.51070404052734.tif")
 
 # crop depth to EEZ
 depth_crop <- crop(depth, eez_gulf)
 
 # mask depth to EEz
 depth_mask <- mask(depth_crop, eez_gulf)
+plot(depth_mask)
 
+
+# Write a Raster for Suitability Analysis
+writeRaster(depth_mask, paste0(path, "depth_mask.tif"), overwrite = T)
 
 ```
 
@@ -95,6 +116,49 @@ rcl_matrix <- c(-Inf, Inf, 0)
 empty_raster <- reclassify(depth_mask, rcl= rcl_matrix)
 
 ```
+
+
+#### BIO-ORACLE layers http://www.bio-oracle.org/code.php
+
+```{r}
+# Explore datasets in the 'sdmpredictors' package 
+# list_datasets() 
+
+# Explore layers in a dataset 
+# list_layers()
+
+# Description of additional functions in the 'sdmpredictors' package: https://onlinelibrary.wiley.com/doi/pdf/10.1111/geb.12693
+```
+
+
+SST
+```{r}
+# download max & min SST from BIO-ORACLE
+max_sst <- load_layers("BO_sstmax") 
+min_sst <- load_layers("BO_sstmin") 
+
+newproj <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+
+# reproject
+min_sst_project <- projectRaster(min_sst, crs = newproj)
+max_sst_project <- projectRaster(max_sst, crs = newproj)
+
+# crop to aoi
+min_sst_crop <- crop(min_sst_project, aoi)
+max_sst_crop <- crop(max_sst_project, aoi)
+  
+# mask 
+min_sst_mask <- mask(min_sst_crop, eez_gulf)
+max_sst_mask <- mask(max_sst_crop, eez_gulf)
+plot(min_sst_mask)
+plot(max_sst_mask)
+
+
+```
+
+# Exclusion Layers
+
+## Natural Resources
 
 Artificial Reefs
 ```{r}
@@ -113,6 +177,7 @@ plot(artificial_reefs)
 ```
 
 Marine Protected Areas
+
 ```{r}
 # read in MPAs
 mpa <- read_sf("../data/MPAI2017", layer = "MPAI_2017")
@@ -135,6 +200,192 @@ mpa_crop <- st_crop(mpa_project, aoi)
   plot(mpas_binary)
   #freq(mpas_binary)
 
+```
+
+## Travel lanes
+
+Shipping lanes
+```{r}
+# read in shipping lanes
+shipping <- read_sf("../data/shippinglanes/", layer = "shippinglanes")
+
+# reproject 
+ship_project <- shipping %>% 
+  st_transform(crs_aoi) 
+
+# crop
+ship_crop <- ship_project %>% 
+  st_crop(eez_gulf)
+
+# filter to only include shipping lanes and fairways
+ship_filter <- ship_crop %>% 
+  filter(THEMELAYER == "Shipping Fairways Lanes and Zones" | 
+           THEMELAYER == "Traffic Separation Schemes" |
+           THEMELAYER == "Traffic Separation Schemes/Traffic Lanes")
+
+# rasterize & mask
+ship_binary <- rasterize(ship_filter, empty_raster, field = 0, background = 1) %>% 
+    mask(eez_gulf)
+
+plot(ship_binary)
+
+```
+
+## Infrastructure
+
+Oil and gas platforms
+
+```{r}
+# read in oil and gas platforms 
+og_platform <- read_sf(dsn = "../data/OilandGasPlatforms/OilandGasPlatforms.gdb/",
+                       layer = "OilandGasPlatforms")
+
+# add 500 meter buffer around points
+og_buffer <- st_buffer(og_platform, 500)
+
+# reproject and crop
+og_crop <- og_buffer %>% 
+  st_transform(crs_aoi) %>% 
+  st_crop(aoi)
+
+# rasterize & mask
+og_binary <- rasterize(og_crop, empty_raster,
+                                   field = 0, background = 1) %>% 
+  mask(eez_gulf)
+
+# plot it
+plot(og_binary)
+map('world',fill=T,add=T,col='gray')
+```
+
+Oil and gas wells
+
+```{r}
+# read in oil and gas wells
+#og_wells <- read_sf(dsn = "../data/OilandGasWells/OilandGasWells.gdb/",
+ #                   layer = "OilandGasWells")
+
+# reproject 
+#og_wells_project <- og_wells %>% 
+ # st_transform(crs_aoi)
+
+```
+
+
+Submarine cables
+
+```{r}
+# read in submarine cables
+sub_cables <- read_sf(dsn = "../data/SubmarineCables/NOAAChartedSubmarineCables.gdb/",
+                      layer = "NOAAChartedSubmarineCables")
+
+# reproject 
+sub_cables_project <- sub_cables %>% 
+  st_transform(crs_aoi) 
+
+# recast
+sub_cables_cast <- st_cast(sub_cables_project, "MULTILINESTRING")
+
+# crop
+sub_cables_crop <- st_crop(sub_cables_cast, aoi)
+
+plot(sub_cables_crop$Shape)
+
+# rasterize & mask
+sub_cables_binary <- rasterize(sub_cables_crop, empty_raster,
+                                   field = 0, background = 1) %>% 
+  mask(eez_gulf)
+
+
+plot(sub_cables_binary)
+
+```
+
+Submarine cable areas
+
+```{r}
+# read in submarine cables
+sub_cable_area <- read_sf(dsn = "../data/SubmarineCableAreas/SubmarineCableAreas.gdb/",
+                      layer = "SubmarineCableAreas" )
+
+# reproject 
+sub_cable_area_project <- sub_cable_area %>% 
+  st_transform(crs_aoi) 
+
+# crop
+sub_cable_area_crop <- st_crop(sub_cable_area_project, aoi)
+
+# rasterize & mask
+sub_cable_area_binary <- rasterize(sub_cable_area_crop, empty_raster,
+                                   field = 0, background = 1) %>% 
+  mask(eez_gulf)
+
+plot(sub_cable_area_binary)
+map('world',fill=T,add=T,col='gray')
+
+```
+
+Pipeline areas
+```{r}
+# read in pipeline areas
+pipeline_areas <- read_sf(dsn = "../data/PipelineArea/PipelineArea.gdb/",
+                          layer = "PipelineArea")
+
+# reproject
+pipe_project <- st_transform(pipeline_areas, crs_aoi)
+
+# crop
+pipe_crop <- st_crop(pipe_project, aoi)
+
+plot(pipe_crop$Shape)
+
+# rasterize and mask
+pipe_binary <- rasterize(pipe_crop, empty_raster,
+                                   field = 0, background = 1) %>% 
+  mask(eez_gulf)
+
+plot(pipe_binary)
+
+```
+
+## Military
+
+Danger and restricted zones
+```{r}
+
+# read in sf
+
+danger_zones <- st_read(dsn = "../data/DangerZonesAndRestrictedAreas/DangerZonesandRestrictedAreas.gdb/", 
+                        layer = "DangerZonesandRestrictedAreas")
+
+
+# reproject
+danger_reproject <- st_transform(danger_zones, crs_aoi) 
+
+# recast to multipolygon for cropping
+danger_mp <- st_cast(danger_reproject, "MULTIPOLYGON")
+
+# crop
+danger_crop <- st_crop(danger_mp, aoi)
+
+# rasterize and mask
+danger_binary <- rasterize(danger_crop, empty_raster,
+                                   field = 0, background = 1) %>% 
+  mask(eez_gulf)
+
+plot(danger_binary)
+
+```
+
+
+All suitable areas
+```{r}
+
+suitable <- overlay(ship_binary, mpas_binary, sub_cable_area_binary, pipe_binary,
+                    danger_binary, og_binary, 
+                    fun = function(a, b, c, d, e, f){a*b*c*d*e*f})
+plot(suitable)
+map('world',fill=T,add=T,col='gray')
 ```
 
 

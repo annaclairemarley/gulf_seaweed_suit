@@ -1,0 +1,69 @@
+---
+title: "Suitability"
+author: "AnnaClaire Marley"
+date: "5/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#load packages
+library(tidyverse)
+library(raster)
+library(sdmpredictors)
+```
+
+
+Suitability 
+
+- Depth: 25-100m
+- Min sea surface temp: >22°C
+- Max sea surface temp: <32°C
+- Distance to shore: <25 nautical miles
+- Current velocity max: <1m/s
+- Current velocity min: 
+- Min dissolved oxygen: >4.41 mg/L (70.559 mmol m^3)
+- Min pH:
+- Max pH: 
+- light:
+
+Defining variables
+```{r}
+min_depth <- -25 
+max_depth <- -100
+
+```
+
+
+```{r}
+# set up path to load activate layers
+
+path <- "../data/Active_Data_Layers/"
+```
+
+
+Depth
+```{r}
+
+# read in raster
+depth_mask <- raster(paste0(path,"/depth_mask.tif"))
+
+# Reclassification matrix 
+rcl_matrix_depth <- c(-Inf, max_depth, 0,
+                   max_depth, min_depth, 1,
+                   min_depth, 0, 0,
+                   0, Inf, 0)
+
+# Reclassify 
+depth_binary <- reclassify(depth_mask, rcl = rcl_matrix_depth)
+
+# Plot reclassified layer
+plot(depth_binary)
+
+```
+
+
+
