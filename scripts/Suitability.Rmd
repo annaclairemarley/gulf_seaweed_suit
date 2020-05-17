@@ -22,7 +22,6 @@ Suitability
 - Depth: 25-100m
 - Min sea surface temp: >22°C
 - Max sea surface temp: <32°C
-- Distance to shore: <25 nautical miles
 - Current velocity max: <1m/s
 - Current velocity min: 
 - Min dissolved oxygen: >4.41 mg/L (70.559 mmol m^3)
@@ -32,8 +31,10 @@ Suitability
 
 Defining variables
 ```{r}
-min_depth <- -25 
-max_depth <- -100
+min_depth_value <- -25 
+max_depth_value <- -100
+max_sst_value <- 32
+min_sst_value <- 22
 
 ```
 
@@ -65,5 +66,21 @@ plot(depth_binary)
 
 ```
 
+SST
+```{r}
+# read in raster
+max_sst <- raster(paste0(path,"/max_sst_mask.tif"))
+
+# reclassification matrix
+rcl_max_sst <- c(-Inf, max_sst_value, 1,
+                max_sst_value, Inf, 0)
+
+# reclassify
+max_sst_binary <- reclassify(max_sst, rcl = rcl_max_sst)
+
+# plot reclassified layer
+plot(max_sst_binary)
+
+```
 
 

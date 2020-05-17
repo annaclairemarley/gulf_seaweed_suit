@@ -19,6 +19,7 @@ library(ggplot2)
 library(maps)
 library(rgdal)
 library(raster)
+library(sdmpredictors)
 ```
 
 This Rmarkdown:
@@ -48,6 +49,21 @@ crs_aoi <- st_crs(aoi)
 ```
 
 
+Gulf area
+```{r}
+# load gulf area
+gulf_area <- read_sf(dsn = "../data/gulf_mexico_area/",
+                     layer = "iho")
+
+# reproject
+gulf_area_reproject <- st_transform(gulf_area, crs_aoi)
+
+plot(gulf_area_reproject$geometry)
+map('world',fill=T,add=T,col='gray')
+
+```
+
+
 EEZ 
 ```{r}
 # read in world eez
@@ -60,10 +76,12 @@ us_eez <- eez %>%
   st_transform(crs_aoi)
 
 # crop to the gulf
-eez_gulf <- st_crop(us_eez, aoi)
+eez_gulf <- st_crop(us_eez, aoi) 
 plot(eez_gulf$geometry)
 
-
+# create new polygon of the eez that only counts as gulf area 
+eez_gulf <- st_intersection(gulf_area_reproject, eez_gulf)
+plot(eez_gulf$geometry)
 ```
 
 
@@ -87,45 +105,18 @@ ggplot(gulf_crop) +
 
 # Suitability Layers
 
-Depth Data
-```{r}
-# Get depth data of the gulf 
-depth <- raster("../data/GEBCO_2019_21_Apr_2020_800d0264f91d/",
-                       "gebco_2019_n31.291637420654297_s17.777252197265625_w-100.55442810058594_e-78.51070404052734.tif")
-
-# crop depth to EEZ
-depth_crop <- crop(depth, eez_gulf)
-
-# mask depth to EEz
-depth_mask <- mask(depth_crop, eez_gulf)
-plot(depth_mask)
-
-
-# Write a Raster for Suitability Analysis
-writeRaster(depth_mask, paste0(path, "depth_mask.tif"), overwrite = T)
-
-```
-
-
-Create an Empty Raster Using Depth as a Template
-```{r}
-# Reclassification matrix for empty raster
-rcl_matrix <- c(-Inf, Inf, 0)
-
-# Reclassify the depth layer to make it an empty raster
-empty_raster <- reclassify(depth_mask, rcl= rcl_matrix)
-
-```
 
 
 #### BIO-ORACLE layers http://www.bio-oracle.org/code.php
+*if from bio oracle don't need to resample rasters all have same resolution of 5 arcmin*
 
 ```{r}
 # Explore datasets in the 'sdmpredictors' package 
 # list_datasets() 
 
 # Explore layers in a dataset 
-# list_layers()
+list_layers() %>% 
+  filter(dataset_code == "Bio-ORACLE")
 
 # Description of additional functions in the 'sdmpredictors' package: https://onlinelibrary.wiley.com/doi/pdf/10.1111/geb.12693
 ```
@@ -150,11 +141,49 @@ max_sst_crop <- crop(max_sst_project, aoi)
 # mask 
 min_sst_mask <- mask(min_sst_crop, eez_gulf)
 max_sst_mask <- mask(max_sst_crop, eez_gulf)
+
+#plot
 plot(min_sst_mask)
 plot(max_sst_mask)
+map('world',fill=T,add=T,col='gray')
 
+
+# Write rasters for Suitability Analysis
+writeRaster(max_sst_mask, paste0(path, "max_sst_mask.tif"), overwrite = T)
+writeRaster(min_sst_mask, paste0(path, "min_sst_mask.tif"), overwrite = T)
+```
+
+Depth Data
+```{r}
+# Get depth data of the gulf 
+depth <- raster("../data/GEBCO_2019_21_Apr_2020_800d0264f91d/",
+                       "gebco_2019_n31.291637420654297_s17.777252197265625_w-100.55442810058594_e-78.51070404052734.tif")
+
+# crop depth to EEZ
+depth_crop <- crop(depth, aoi)
+
+# mask depth to EEz
+depth_mask <- mask(depth_crop, eez_gulf)
+plot(depth_mask)
+
+# resample to Bio-ORACLE cell size
+
+# Write a Raster for Suitability Analysis
+writeRaster(depth_mask, paste0(path, "depth_mask.tif"), overwrite = T)
 
 ```
+
+
+Create an Empty Raster Using Depth as a Template
+```{r}
+# Reclassification matrix for empty raster
+rcl_matrix <- c(-Inf, Inf, 0)
+
+# Reclassify the depth layer to make it an empty raster
+empty_raster <- reclassify(depth_mask, rcl= rcl_matrix)
+
+```
+
 
 # Exclusion Layers
 
