@@ -17,7 +17,7 @@ library(sdmpredictors)
 ```
 
 
-Suitability 
+# Suitability 
 
 - Depth: 25-100m
 - Min sea surface temp: >22°C
@@ -33,16 +33,19 @@ Suitability
 
 Defining variables
 ```{r}
+# depth
 min_depth <- -10
 max_depth <- -100
 
+# sea surface temperature
 max_sst_value <- 35
 min_sst_value <- 0
 
-
+# Nitrate:Phosphate ratio
 n_p_ratio_min <- 4
 n_p_ratio_max <- 80
 
+# current velovity at minimum bottom depth
 curvel_min_value <- 0.1
 curvel_max_value <- 1.0
 
@@ -51,7 +54,6 @@ curvel_max_value <- 1.0
 
 ```{r}
 # set up path to load activate layers
-
 path <- "../data/Active_Data_Layers/"
 ```
 
@@ -146,7 +148,7 @@ plot(curvel_max_binary)
 ```
 
 
-All suitable areas
+Suitability areas
 ```{r}
 
 suitable_areas <- overlay(np_binary, depth_binary, max_sst_binary,
@@ -156,4 +158,45 @@ plot(suitable_areas)
 map('world',fill=T,add=T,col='gray')
 ```
 
+# Exclusion Layers
 
+```{r}
+# Marine protected areas
+mpa <- raster(paste0(path,"/mpas_binary.tif"))
+
+# Shipping lanes
+shipping_lanes <- raster(paste0(path,"/ship_binary.tif"))
+
+# Submarine Cable Areas
+sub_cable_areas <- raster(paste0(path,"/sub_cable_area_binary.tif"))
+
+# Pipeline Areas
+pipeline_areas <- raster(paste0(path,"/pipe_binary.tif"))
+
+# Military danger zones
+military_danger <- raster(paste0(path,"/danger_binary.tif"))
+
+# Oil and Gas platforms
+oil_gas_platforms <- raster(paste0(path,"/og_binary.tif"))
+
+```
+
+
+# Final Suitability Map
+```{r}
+
+suitable_areas <- overlay(np_binary, 
+                          depth_binary, 
+                          max_sst_binary,
+                          min_sst_binary, 
+                          mpa,
+                          shipping_lanes,
+                          sub_cable_areas,
+                          pipeline_areas,
+                          military_danger,
+                          oil_gas_platforms,
+                          fun = function(a, b, c, d, e, f, g, h, i, j){a*b*c*d*e*f*g*h*i*j})
+
+plot(suitable_areas)
+map('world',fill=T,add=T,col='gray')
+```
