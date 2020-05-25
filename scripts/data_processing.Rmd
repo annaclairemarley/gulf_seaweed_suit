@@ -31,7 +31,6 @@ This Rmarkdown:
 
 ```{r}
 # set up path for saving files 
-
 path <- "../data/Active_Data_Layers/"
 
 ```
@@ -46,6 +45,8 @@ aoi <- read_sf("../data/gulf_of_mexico_aoi/",
 # assign projections 
 crs_aoi <- st_crs(aoi)
 
+#projection
+newproj <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 ```
 
 
@@ -105,8 +106,6 @@ ggplot(gulf_crop) +
 
 # Suitability Layers
 
-
-
 #### BIO-ORACLE layers http://www.bio-oracle.org/code.php
 *if from bio oracle don't need to resample rasters all have same resolution of 5 arcmin*
 
@@ -121,58 +120,86 @@ list_layers() %>%
 # Description of additional functions in the 'sdmpredictors' package: https://onlinelibrary.wiley.com/doi/pdf/10.1111/geb.12693
 ```
 
+```{r}
+#### Function to process BIO-ORACLE data ####
+
+#' process_bo_data
+#'
+#' @param BO_layer layer loaded from bio oracle
+#' @param proj projection to reproject raster layer in
+#' @param area aoi
+#' @param mask polygon to mask the raster file to
+#'
+#' @return mask of raster layer -- preset to be mask of gulf eez
+#'
+#' @examples
+
+process_bo_data = function(BO_layer, proj = newproj, area = aoi, mask = eez_gulf) {
+  
+  #reproject
+  layer_proj <- projectRaster(BO_layer, crs = proj)
+
+  # crop to aoi
+  layer_crop <- crop(layer_proj, area)
+  
+  # mask
+  layer_mask <- mask(layer_crop, mask)
+  
+  return(layer_mask)
+}
+
+```
 
 SST
 ```{r}
+
 # download max & min SST from BIO-ORACLE
 max_sst <- load_layers("BO_sstmax") 
 min_sst <- load_layers("BO_sstmin") 
 
-newproj <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+# reproject, crop, mask function
+max_sst_mask <- process_bo_data(max_sst)
+min_sst_mask <- process_bo_data(min_sst)
 
-# reproject
-min_sst_project <- projectRaster(min_sst, crs = newproj)
-max_sst_project <- projectRaster(max_sst, crs = newproj)
-
-# crop to aoi
-min_sst_crop <- crop(min_sst_project, aoi)
-max_sst_crop <- crop(max_sst_project, aoi)
-  
-# mask 
-min_sst_mask <- mask(min_sst_crop, eez_gulf)
-max_sst_mask <- mask(max_sst_crop, eez_gulf)
-
-#plot
-plot(min_sst_mask)
+# plot
 plot(max_sst_mask)
-map('world',fill=T,add=T,col='gray')
-
+plot(min_sst_mask)
 
 # Write rasters for Suitability Analysis
 writeRaster(max_sst_mask, paste0(path, "max_sst_mask.tif"), overwrite = T)
 writeRaster(min_sst_mask, paste0(path, "min_sst_mask.tif"), overwrite = T)
 ```
 
-Depth Data
+
+Average Nitrates (mol.m-3)
 ```{r}
-# Get depth data of the gulf 
-depth <- raster("../data/GEBCO_2019_21_Apr_2020_800d0264f91d/",
-                       "gebco_2019_n31.291637420654297_s17.777252197265625_w-100.55442810058594_e-78.51070404052734.tif")
+# load layer
+mean_nitrate_ss <- load_layers("BO2_nitratemean_ss")
 
-# crop depth to EEZ
-depth_crop <- crop(depth, aoi)
+# reproject, crop, mask function
+mean_nitrate_mask <- process_bo_data(mean_nitrate_ss)
 
-# mask depth to EEz
-depth_mask <- mask(depth_crop, eez_gulf)
-plot(depth_mask)
+# plot
+plot(mean_nitrate_mask)
 
-# resample to Bio-ORACLE cell size
-
-# Write a Raster for Suitability Analysis
-writeRaster(depth_mask, paste0(path, "depth_mask.tif"), overwrite = T)
-
+# write to file
+writeRaster(mean_nitrate_mask, paste0(path, "mean_nitrate_mask.tif"), overwrite = T)
 ```
 
+Phosphates (mean_nitrate_mask)
+```{r}
+# load layer
+mean_phosphate_ss <- load_layers("BO2_phosphatemean_ss")
+
+# reproject, crop, mask function
+mean_phosphate_mask <- process_bo_data(mean_phosphate_ss)
+
+# plot
+plot(mean_phosphate_mask)
+
+# write to file
+writeRaster(mean_phosphate_mask, paste0(path, "mean_phosphate_mask.tif"), overwrite = T)
+```
 
 Create an Empty Raster Using Depth as a Template
 ```{r}
@@ -180,7 +207,72 @@ Create an Empty Raster Using Depth as a Template
 rcl_matrix <- c(-Inf, Inf, 0)
 
 # Reclassify the depth layer to make it an empty raster
-empty_raster <- reclassify(depth_mask, rcl= rcl_matrix)
+empty_raster <- reclassify(mean_phosphate_mask, rcl= rcl_matrix)
+
+```
+
+N:P ratio
+
+```{r}
+# calculate N:P ratio and scale down by 1000
+n_p_ratio <- (mean_nitrate_mask/mean_phosphate_mask)/1000
+plot(n_p_ratio)
+
+# write to file
+writeRaster(n_p_ratio, paste0(path, "n_p_ratio.tif"), overwrite = T)
+```
+
+
+Current Velocity range
+
+Max current at minimum depth
+```{r}
+# get max current data
+curvel_max <- load_layers("BO2_curvelmax_bdmin")
+
+# reproject, crop, mask function
+curvel_max_mask <- process_bo_data(curvel_max)
+
+# plot
+plot(curvel_max_mask)
+
+# write to file
+writeRaster(curvel_max_mask, paste0(path, "curvel_max_mask.tif"), overwrite = T)
+```
+
+
+Range of current velocity at minimum depth
+```{r}
+# get current range 
+curvel_range <- load_layers("BO2_curvelrange_bdmin")
+
+
+```
+
+
+
+
+Depth Data
+```{r}
+# Get depth data of the gulf 
+depth <- raster("../data/GEBCO_2019_21_Apr_2020_800d0264f91d/gebco_2019_n31.291637420654297_s17.777252197265625_w-100.55442810058594_e-78.51070404052734.tif")
+
+# reproject
+depth_proj <- projectRaster(depth, crs = newproj)
+
+# crop depth to EEZ
+depth_crop <- crop(depth, aoi)
+
+# Resample to Bio-Oracle Cell Size (ATM Bio-Oracle Cell Size is the Standard)
+depth_resample <- resample(depth_crop, max_sst_crop, method='ngb', progress='text')
+
+# mask depth to EEZ
+depth_mask <- mask(depth_resample, eez_gulf)
+
+plot(depth_mask)
+
+# Write a Raster for Suitability Analysis
+writeRaster(depth_mask, paste0(path, "depth_mask.tif"), overwrite = T)
 
 ```
 

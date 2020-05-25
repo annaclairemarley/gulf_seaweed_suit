@@ -22,7 +22,9 @@ Suitability
 - Depth: 25-100m
 - Min sea surface temp: >22°C
 - Max sea surface temp: <32°C
-- Current velocity max: <1m/s
+- N:P ratio: between 4 and 80
+
+- Current velocity max: 0.1-1 m/s
 - Current velocity min: 
 - Min dissolved oxygen: >4.41 mg/L (70.559 mmol m^3)
 - Min pH:
@@ -31,10 +33,18 @@ Suitability
 
 Defining variables
 ```{r}
-min_depth_value <- -25 
-max_depth_value <- -100
-max_sst_value <- 32
-min_sst_value <- 22
+min_depth <- -10
+max_depth <- -100
+
+max_sst_value <- 35
+min_sst_value <- 0
+
+
+n_p_ratio_min <- 4
+n_p_ratio_max <- 80
+
+curvel_min_value <- 0.1
+curvel_max_value <- 1.0
 
 ```
 
@@ -66,7 +76,7 @@ plot(depth_binary)
 
 ```
 
-SST
+Max SST
 ```{r}
 # read in raster
 max_sst <- raster(paste0(path,"/max_sst_mask.tif"))
@@ -81,6 +91,69 @@ max_sst_binary <- reclassify(max_sst, rcl = rcl_max_sst)
 # plot reclassified layer
 plot(max_sst_binary)
 
+```
+
+Min SST
+```{r}
+# read in raster
+min_sst <- raster(paste0(path,"/min_sst_mask.tif"))
+
+# reclassification matrix
+rcl_min_sst <- c(-Inf, min_sst_value, 0,
+                min_sst_value, Inf, 1)
+
+# reclassify
+min_sst_binary <- reclassify(min_sst, rcl = rcl_min_sst)
+
+# plot reclassified layer
+plot(min_sst_binary)
+
+```
+
+N:P ratio
+```{r}
+# read in raster
+n_p_ratio <- raster(paste0(path,"/n_p_ratio.tif"))
+
+# Reclassification matrix 
+rcl_n_p <- c(-Inf, n_p_ratio_min, 0,
+                   n_p_ratio_min, n_p_ratio_max, 1,
+                   n_p_ratio_max, Inf, 0)
+
+# reclassify
+np_binary <- reclassify(n_p_ratio, rcl = rcl_n_p)
+
+# plot reclassified layer
+plot(np_binary)
+```
+
+Max current at minimum bottom depth
+```{r}
+# read in raster
+curvel_max <- raster(paste0(path,"/curvel_max_mask.tif"))
+
+#reclassification matrix
+rcl_curvel_max <- c(-Inf, curvel_max_value, 1,
+                   curvel_min_value, curvel_max_value, 1,
+                   curvel_max_value, Inf, 0)
+
+# reclassify
+curvel_max_binary <- raster::reclassify(curvel_max, rcl = rcl_curvel_max)
+
+# plot reclassified layer
+plot(curvel_max_binary)
+
+```
+
+
+All suitable areas
+```{r}
+
+suitable_areas <- overlay(np_binary, depth_binary, max_sst_binary,
+                          min_sst_binary, 
+                          fun = function(a, b, c, d){a*b*c*d})
+plot(suitable_areas)
+map('world',fill=T,add=T,col='gray')
 ```
 
 
