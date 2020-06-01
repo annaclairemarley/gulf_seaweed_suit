@@ -19,38 +19,53 @@ library(sdmpredictors)
 
 # Suitability 
 
-- Depth: 25-100m
-- Min sea surface temp: >22°C
-- Max sea surface temp: <32°C
+**General Seaweed:**
+- Depth: 10-200m
 - N:P ratio: between 4 and 80
+-----------------------------------------
+- Sea surface temperature range: 0-35°C
+- Current velocity: 0.1-1 m/s
 
-- Current velocity max: 0.1-1 m/s
-- Current velocity min: 
-- Min dissolved oxygen: >4.41 mg/L (70.559 mmol m^3)
-- Min pH:
-- Max pH: 
-- light:
+*Sargassum* specific:
+- Optimal sea surface temp: 18-30°C
+- Optimal salinity: 24-42 psu
 
-Defining variables
+*Euchema* specific:
+- Optimal sea surface temp: 25-30°C
+- Optimal salinity: 28-34 psu
+
+*Gracilaria* specific:
+- Optimal sea surface temp: 15-30°C
+- Optimal salinity: 15-25 psu
+
+*Gracilaria spp* from Lisa specific:
+- Optimal sea surface temp: 20-30°C
+- Optimal salinity: 25-40 psu
+- Current velocity: 0.05-5 m/s
+
+**Seaweed Parameters**
 ```{r}
 # depth
 min_depth <- -10
-max_depth <- -100
-
-# sea surface temperature
-max_sst_value <- 35
-min_sst_value <- 0
+max_depth <- -200
 
 # Nitrate:Phosphate ratio
 n_p_ratio_min <- 4
 n_p_ratio_max <- 80
 
-# current velovity at minimum bottom depth
-curvel_min_value <- 0.1
-curvel_max_value <- 1.0
+# sea surface temperature
+min_sst_value <- 20
+max_sst_value <- 30
+
+# salinity
+min_sal_value <- 25
+max_sal_value <- 40
+
+# current velocity
+min_curvel_value <- 0.05
+max_curvel_value <- 5
 
 ```
-
 
 ```{r}
 # set up path to load activate layers
@@ -78,34 +93,35 @@ plot(depth_binary)
 
 ```
 
+```{r}
+# load function to relcassify rasters
+source('../functions/reclass_data.R')
+```
+
 Max SST
 ```{r}
 # read in raster
 max_sst <- raster(paste0(path,"/max_sst_mask.tif"))
 
-# reclassification matrix
-rcl_max_sst <- c(-Inf, max_sst_value, 1,
-                max_sst_value, Inf, 0)
-
 # reclassify
-max_sst_binary <- reclassify(max_sst, rcl = rcl_max_sst)
+max_sst_binary <- reclass_data(raster = max_sst, max_thresh = max_sst_value, 
+                        one_thresh = TRUE, which_thresh = "MAX")
 
 # plot reclassified layer
 plot(max_sst_binary)
 
 ```
 
+
 Min SST
 ```{r}
 # read in raster
 min_sst <- raster(paste0(path,"/min_sst_mask.tif"))
 
-# reclassification matrix
-rcl_min_sst <- c(-Inf, min_sst_value, 0,
-                min_sst_value, Inf, 1)
-
 # reclassify
-min_sst_binary <- reclassify(min_sst, rcl = rcl_min_sst)
+min_sst_binary <- reclass_data(raster = min_sst, min_thresh = min_sst_value, 
+                        one_thresh = TRUE, which_thresh = "MIN")
+
 
 # plot reclassified layer
 plot(min_sst_binary)
@@ -117,46 +133,98 @@ N:P ratio
 # read in raster
 n_p_ratio <- raster(paste0(path,"/n_p_ratio.tif"))
 
-# Reclassification matrix 
-rcl_n_p <- c(-Inf, n_p_ratio_min, 0,
-                   n_p_ratio_min, n_p_ratio_max, 1,
-                   n_p_ratio_max, Inf, 0)
-
 # reclassify
-np_binary <- reclassify(n_p_ratio, rcl = rcl_n_p)
+np_binary <- reclass_data(raster = n_p_ratio, min_thresh = n_p_ratio_min,
+                          max_thresh = n_p_ratio_max, one_thresh = FALSE)
 
 # plot reclassified layer
 plot(np_binary)
 ```
 
-Max current at minimum bottom depth
+Salinity
 ```{r}
-# read in raster
-curvel_max <- raster(paste0(path,"/curvel_max_mask.tif"))
-
-#reclassification matrix
-rcl_curvel_max <- c(-Inf, curvel_max_value, 1,
-                   curvel_min_value, curvel_max_value, 1,
-                   curvel_max_value, Inf, 0)
+# read in files
+sal_max <- raster(paste0(path,"/sal_max_mask.tif"))
+sal_min <- raster(paste0(path,"/sal_min_mask.tif"))
 
 # reclassify
-curvel_max_binary <- raster::reclassify(curvel_max, rcl = rcl_curvel_max)
+sal_max_binary <- reclass_data(raster = sal_max, max_thresh = max_sal_value, 
+                        one_thresh = TRUE, which_thresh = "MAX")
+sal_min_binary <- reclass_data(raster = sal_min, min_thresh = min_sal_value, 
+                        one_thresh = TRUE, which_thresh = "MIN")
 
-# plot reclassified layer
-plot(curvel_max_binary)
+# plot
+plot(sal_max_binary)
+plot(sal_min_binary)
 
 ```
 
+Current Velocity
+
+```{r}
+# read in raster
+curvel_max <- raster(paste0(path,"/curvel_max_mask.tif"))
+curvel_min <- raster(paste0(path,"/curvel_min_mask.tif"))
+
+# reclassify
+curvel_max_binary <- reclass_data(raster = curvel_max, max_thresh = max_curvel_value, 
+                        one_thresh = TRUE, which_thresh = "MAX")
+curvel_min_binary <- reclass_data(raster = curvel_min, min_thresh = min_curvel_value, 
+                        one_thresh = TRUE, which_thresh = "MIN")
+
+# plot
+plot(curvel_max_binary)
+plot(curvel_min_binary)
+
+```
+
+
+### Final Maps
+
+```{r}
+# source functions to save maps created
+source("../functions/save_map.R")
+```
 
 Suitability areas
 ```{r}
 
-suitable_areas <- overlay(np_binary, depth_binary, max_sst_binary,
-                          min_sst_binary, 
-                          fun = function(a, b, c, d){a*b*c*d})
-plot(suitable_areas)
+suitable_areas <- raster::overlay(np_binary,
+                                  depth_binary, 
+                                  max_sst_binary,
+                                  min_sst_binary, 
+                                  sal_max_binary, 
+                                  sal_min_binary, 
+                                  curvel_max_binary, 
+                                  curvel_min_binary,
+                          fun = function(a, b, c, d, e, f, g, h){a*b*c*d*e*f*g*h})
+# zoom in to see
+suitable_zoom <- crop(suitable_areas, extent(-100, -80, 22, 35))
+
+
+# plot
+plot(suitable_zoom)
 map('world',fill=T,add=T,col='gray')
+
+
 ```
+
+```{r}
+### save the map ###
+#save_map(png_name = "seaweed_gen_suitable.png", title = "General Seaweed Suitability", 
+#         color = "light blue")
+
+# sargassum
+#save_map(png_name = "sargassum_suitable.png", title = "Sargassum Suitability", 
+#         color = "purple")
+# Euchema
+#save_map(png_name = "euchema_suitable.png", title = "Euchema Suitability", 
+#         color = "green")
+# Gracilaria
+#save_map(png_name = "gracilaria_suitable_L.png", title = "Gracilaria Suitability", 
+ #        color = "blue")
+```
+
 
 # Exclusion Layers
 
@@ -181,6 +249,27 @@ oil_gas_platforms <- raster(paste0(path,"/og_binary.tif"))
 
 ```
 
+# Eclusion Map
+
+```{r}
+exclusion <- overlay( mpa,
+                      shipping_lanes,
+                      sub_cable_areas,
+                      pipeline_areas,
+                      military_danger,
+                      oil_gas_platforms,
+                      fun = function(a, b, c, d, e, f){a*b*c*d*e*f})
+
+plot(exclusion)
+map('world',fill=T,add=T,col='gray')
+
+# zoom in to see
+exclusion_zoom <- crop(exclusion, extent(-100, -80, 22, 35))
+
+plot(exclusion_zoom)
+map('world',fill=T,add=T,col='gray')
+
+```
 
 # Final Suitability Map
 ```{r}
@@ -199,4 +288,11 @@ suitable_areas <- overlay(np_binary,
 
 plot(suitable_areas)
 map('world',fill=T,add=T,col='gray')
+
+# zoom in to see
+suitability_zoom <- crop(suitable_areas, extent(-100, -80, 22, 35))
+
+plot(suitability_zoom)
+map('world',fill=T,add=T,col='gray')
+
 ```

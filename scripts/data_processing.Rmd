@@ -95,8 +95,10 @@ plot(eez_gulf$geometry)
 # list_datasets() 
 
 # Explore layers in a dataset 
-list_layers() %>% 
+list <- list_layers() %>% 
   filter(dataset_code == "Bio-ORACLE")
+
+list_layers(datasets)
 
 # Description of additional functions in the 'sdmpredictors' package: https://onlinelibrary.wiley.com/doi/pdf/10.1111/geb.12693
 ```
@@ -182,7 +184,7 @@ plot(mean_phosphate_mask)
 writeRaster(mean_phosphate_mask, paste0(path, "mean_phosphate_mask.tif"), overwrite = T)
 ```
 
-Create an Empty Raster Using Depth as a Template
+Create an Empty Raster Using Phosphate as a Template
 ```{r}
 # Reclassification matrix for empty raster
 rcl_matrix <- c(-Inf, Inf, 0)
@@ -203,29 +205,54 @@ plot(n_p_ratio)
 writeRaster(n_p_ratio, paste0(path, "n_p_ratio.tif"), overwrite = T)
 ```
 
+Salinity (PSS)
 
-Current Velocity range
-
-Max current at minimum depth
 ```{r}
-# get max current data
-curvel_max <- load_layers("BO2_curvelmax_bdmin")
+# max and min salinity at sea surface
+salinity_min <- load_layers("BO2_salinitymin_ss")
+salinity_max <- load_layers("BO2_salinitymax_ss")
+
+# reproject, crop, mas
+sal_min_mask <- process_bo_data(salinity_min)
+sal_max_mask <- process_bo_data(salinity_max)
+
+# plot
+plot(sal_min_mask)
+plot(sal_max_mask)
+
+# write to file
+writeRaster(sal_min_mask, paste0(path, "sal_min_mask.tif"), overwrite = T)
+writeRaster(sal_max_mask, paste0(path, "sal_max_mask.tif"), overwrite = T)
+```
+
+Sea surface Current Velocity 
+
+```{r}
+# get min current velocity data
+curvel_min_ss <- load_layers("BO2_curvelmin_ss")
 
 # reproject, crop, mask function
-curvel_max_mask <- process_bo_data(curvel_max)
+curvel_min_mask <- process_bo_data(curvel_min_ss)
+
+# plot
+plot(curvel_min_mask)
+
+# write to file
+writeRaster(curvel_min_mask, paste0(path, "curvel_min_mask.tif"), overwrite = T)
+```
+
+```{r}
+# get max current velocity data
+curvel_max_ss <- load_layers("BO2_curvelmax_ss")
+
+# reproject, crop, mask function
+curvel_max_mask <- process_bo_data(curvel_max_ss)
 
 # plot
 plot(curvel_max_mask)
 
 # write to file
 writeRaster(curvel_max_mask, paste0(path, "curvel_max_mask.tif"), overwrite = T)
-```
-
-
-Range of current velocity at minimum depth
-```{r}
-# get current range 
-curvel_range <- load_layers("BO2_curvelrange_bdmin")
 
 
 ```
@@ -418,7 +445,6 @@ Danger and restricted zones
 
 danger_zones <- st_read(dsn = "../data/DangerZonesAndRestrictedAreas/DangerZonesandRestrictedAreas.gdb/", 
                         layer = "DangerZonesandRestrictedAreas")
-
 
 # reproject
 danger_reproject <- st_transform(danger_zones, proj) 
