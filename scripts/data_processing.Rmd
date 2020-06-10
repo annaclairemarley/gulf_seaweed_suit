@@ -184,15 +184,6 @@ plot(mean_phosphate_mask)
 writeRaster(mean_phosphate_mask, paste0(path, "mean_phosphate_mask.tif"), overwrite = T)
 ```
 
-Create an Empty Raster Using Phosphate as a Template
-```{r}
-# Reclassification matrix for empty raster
-rcl_matrix <- c(-Inf, Inf, 0)
-
-# Reclassify the depth layer to make it an empty raster
-empty_raster <- reclassify(mean_phosphate_mask, rcl= rcl_matrix)
-
-```
 
 N:P ratio
 
@@ -257,6 +248,85 @@ writeRaster(curvel_max_mask, paste0(path, "curvel_max_mask.tif"), overwrite = T)
 
 ```
 
+### HYCOM data
+
+#### Sea surface temperature
+
+```{r}
+# max sst
+max_sst_hycom <- list.files("../data/HYCOM/Year_2012/", pattern = "av_sst_max*")
+max_sst_hy_stack <- raster::stack(paste0("../data/HYCOM/Year_2012/", max_sst_hycom))
+
+# min sst
+min_sst_hycom <- list.files("../data/HYCOM/Year_2012/", pattern = "av_sst_min*")
+min_sst_hy_stack <- raster::stack(paste0("../data/HYCOM/Year_2012/", min_sst_hycom))
+
+```
+
+##### Annual SST
+```{r}
+# annual average maximum sst
+max_sst_hy_an <- mean(max_sst_hy_stack)
+
+# process and plot
+max_sst_hy_an_mask <- process_bo_data(max_sst_hy_an)
+plot(max_sst_hy_an_mask)
+
+# annual average minimum sst
+min_sst_hy_an <- mean(min_sst_hy_stack)
+
+# process and plot
+min_sst_hy_an_mask <- process_bo_data(min_sst_hy_an)
+plot(min_sst_hy_an_mask)
+
+# write to file
+writeRaster(max_sst_hy_an_mask, paste0(path, "max_sst_hy_an_mask.tif"), overwrite = T)
+writeRaster(min_sst_hy_an_mask, paste0(path, "min_sst_hy_an_mask.tif"), overwrite = T)
+```
+
+Create an Empty Raster Using min SST as a Template
+```{r}
+# Reclassification matrix for empty raster
+rcl_matrix <- c(-Inf, Inf, 0)
+
+# Reclassify the depth layer to make it an empty raster
+empty_raster <- reclassify(min_sst_hy_an_mask, rcl= rcl_matrix)
+
+```
+
+#### Salinity
+```{r}
+# max salinity
+max_sal_hycom <- list.files("../data/HYCOM/Year_2012/", pattern = "av_sal_max*")
+max_sal_hy_stack <- raster::stack(paste0("../data/HYCOM/Year_2012/", max_sal_hycom))
+
+# min salinity
+min_sal_hycom <- list.files("../data/HYCOM/Year_2012/", pattern = "av_sal_min*")
+min_sal_hy_stack <- raster::stack(paste0("../data/HYCOM/Year_2012/", min_sal_hycom))
+```
+
+##### Annual salinity
+
+```{r}
+# annual average maximum salinity
+max_sal_hy_an <- mean(max_sal_hy_stack)
+
+# process and plot
+max_sal_hy_an_mask <- process_bo_data(max_sal_hy_an)
+plot(max_sal_hy_an_mask)
+
+# annual average minimum salinity
+min_sal_hy_an <- mean(min_sal_hy_stack)
+
+# process and plot
+min_sal_hy_an_mask <- process_bo_data(min_sal_hy_an)
+plot(min_sal_hy_an_mask)
+
+# write to file
+writeRaster(max_sal_hy_an_mask, paste0(path, "max_sal_hy_an_mask.tif"), overwrite = T)
+writeRaster(min_sal_hy_an_mask, paste0(path, "min_sal_hy_an_mask.tif"), overwrite = T)
+```
+
 ### GEBCO 
 
 Depth Data
@@ -270,22 +340,44 @@ depth_proj <- projectRaster(depth, crs = proj)
 # crop depth to EEZ
 depth_crop <- crop(depth, aoi)
 
+```
+
+Resample
+
+```{r}
 # Resample to Bio-Oracle Cell Size (ATM Bio-Oracle Cell Size is the Standard)
   # make resample crop
   max_sst_crop <- crop(projectRaster(max_sst, crs = proj), aoi)
   
   # resample
-  depth_resample <- resample(depth_crop, max_sst_crop, method='ngb', progress='text')
+  depth_resample_bo <- resample(depth_crop, max_sst_crop, method='ngb', progress='text')
 
 # mask depth to EEZ
-depth_mask <- mask(depth_resample, eez_gulf)
+depth_mask_bo <- mask(depth_resample, eez_gulf)
 
-plot(depth_mask)
+plot(depth_mask_bo)
 
 # Write a Raster for Suitability Analysis
-writeRaster(depth_mask, paste0(path, "depth_mask.tif"), overwrite = T)
+writeRaster(depth_mask_bo, paste0(path, "depth_mask_bo.tif"), overwrite = T)
+
+### Resample to HYCOMM cell size
+  # make resample crop
+  max_sst_hy <- crop(projectRaster(min_sst_hy_an, crs = proj), aoi)
+  
+  # resample
+  depth_resample_hy <- resample(depth_crop, max_sst_hy, method='ngb', progress='text')
+
+# mask depth to EEZ
+depth_mask_hy <- mask(depth_resample_hy, eez_gulf)
+
+plot(depth_mask_hy)
+
+# Write a Raster for Suitability Analysis
+writeRaster(depth_mask_hy, paste0(path, "depth_mask_hy.tif"), overwrite = T)
+
 
 ```
+
 
 
 # Exclusion Layers
@@ -317,7 +409,7 @@ mpa_crop <- st_crop(mpa_project, aoi)
   #freq(mpas_binary)
 
 # Write a Raster for Suitability Analysis
-writeRaster(mpas_binary, paste0(path, "mpas_binary.tif"), overwrite = T)
+writeRaster(mpas_binary, paste0(path, "mpas_binary_hy.tif"), overwrite = T)
     
 ```
 
@@ -349,7 +441,7 @@ ship_binary <- rasterize(ship_filter, empty_raster, field = 0, background = 1) %
 plot(ship_binary)
 
 # Write a Raster for Suitability Analysis
-writeRaster(ship_binary, paste0(path, "ship_binary.tif"), overwrite = T)
+writeRaster(ship_binary, paste0(path, "ship_binary_hy.tif"), overwrite = T)
 
 ```
 
@@ -380,7 +472,7 @@ plot(og_binary)
 map('world',fill=T,add=T,col='gray')
 
 # Write a Raster for Suitability Analysis
-writeRaster(og_binary, paste0(path, "og_binary.tif"), overwrite = T)
+writeRaster(og_binary, paste0(path, "og_binary_hy.tif"), overwrite = T)
 ```
 
 Submarine cable areas
@@ -397,6 +489,8 @@ sub_cable_area_project <- sub_cable_area %>%
 # crop
 sub_cable_area_crop <- st_crop(sub_cable_area_project, aoi)
 
+plot(sub_cable_area_crop)
+
 # rasterize & mask
 sub_cable_area_binary <- rasterize(sub_cable_area_crop, empty_raster,
                                    field = 0, background = 1) %>% 
@@ -406,7 +500,7 @@ plot(sub_cable_area_binary)
 map('world',fill=T,add=T,col='gray')
 
 # Write a Raster for Suitability Analysis
-writeRaster(sub_cable_area_binary, paste0(path, "sub_cable_area_binary.tif"), overwrite = T)
+writeRaster(sub_cable_area_binary, paste0(path, "sub_cable_area_binary_hy.tif"), overwrite = T)
 
 ```
 
@@ -432,7 +526,7 @@ pipe_binary <- rasterize(pipe_crop, empty_raster,
 plot(pipe_binary)
 
 # Write a Raster for Suitability Analysis
-writeRaster(pipe_binary, paste0(path, "pipe_binary.tif"), overwrite = T)
+writeRaster(pipe_binary, paste0(path, "pipe_binary_hy.tif"), overwrite = T)
 
 ```
 
@@ -463,7 +557,7 @@ danger_binary <- rasterize(danger_crop, empty_raster,
 plot(danger_binary)
 
 # Write a Raster for Suitability Analysis
-writeRaster(danger_binary, paste0(path, "danger_binary.tif"), overwrite = T)
+writeRaster(danger_binary, paste0(path, "danger_binary_hy.tif"), overwrite = T)
 
 ```
 

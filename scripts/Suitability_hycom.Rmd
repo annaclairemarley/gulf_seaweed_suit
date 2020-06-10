@@ -1,13 +1,14 @@
 ---
-title: "Suitability"
+title: "HYCOM Suitability"
 author: "AnnaClaire Marley"
-date: "5/14/2020"
+date: "6/10/2020"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
 
 ```{r}
 #load packages
@@ -54,12 +55,12 @@ n_p_ratio_min <- 4
 n_p_ratio_max <- 80
 
 # sea surface temperature
-min_sst_value <- 18
+min_sst_value <- 20
 max_sst_value <- 30
 
 # salinity
-min_sal_value <- 24
-max_sal_value <- 42
+min_sal_value <- 25
+max_sal_value <- 40
 
 # current velocity
 min_curvel_value <- 0.1
@@ -77,7 +78,7 @@ Depth
 ```{r}
 
 # read in raster
-depth_mask <- raster(paste0(path,"/depth_mask.tif"))
+depth_mask <- raster(paste0(path,"/depth_mask_hy.tif"))
 
 # Reclassification matrix 
 rcl_matrix_depth <- c(-Inf, max_depth, 0,
@@ -101,13 +102,12 @@ source('../functions/reclass_data.R')
 Max SST
 ```{r}
 # read in raster
-max_sst <- raster(paste0(path,"/max_sst_mask.tif"))
+max_sst <- raster(paste0(path,"/max_sst_hy_an_mask.tif"))
 
 # reclassify
 max_sst_binary <- reclass_data(raster = max_sst, max_thresh = max_sst_value, 
                         one_thresh = TRUE, which_thresh = "MAX")
 
-plot(max_sst)
 
 # plot reclassified layer
 plot(max_sst_binary)
@@ -118,7 +118,7 @@ plot(max_sst_binary)
 Min SST
 ```{r}
 # read in raster
-min_sst <- raster(paste0(path,"/min_sst_mask.tif"))
+min_sst <- raster(paste0(path,"/min_sst_hy_an_mask.tif"))
 
 plot(min_sst)
 
@@ -132,24 +132,11 @@ plot(min_sst_binary)
 
 ```
 
-N:P ratio
-```{r}
-# read in raster
-n_p_ratio <- raster(paste0(path,"/n_p_ratio.tif"))
-
-# reclassify
-np_binary <- reclass_data(raster = n_p_ratio, min_thresh = n_p_ratio_min,
-                          max_thresh = n_p_ratio_max, one_thresh = FALSE)
-
-# plot reclassified layer
-plot(np_binary)
-```
-
 Salinity
 ```{r}
 # read in files
-sal_max <- raster(paste0(path,"/sal_max_mask.tif"))
-sal_min <- raster(paste0(path,"/sal_min_mask.tif"))
+sal_max <- raster(paste0(path,"/min_sal_hy_an_mask.tif"))
+sal_min <- raster(paste0(path,"/min_sal_hy_an_mask.tif"))
 
 
 # reclassify
@@ -164,24 +151,24 @@ plot(sal_min_binary)
 
 ```
 
-Current Velocity
-
+N:P ratio
 ```{r}
 # read in raster
-curvel_max <- raster(paste0(path,"/curvel_max_mask.tif"))
-curvel_min <- raster(paste0(path,"/curvel_min_mask.tif"))
+n_p_ratio <- raster(paste0(path,"/n_p_ratio.tif"))
+
+# resample
+n_p_ratio_resample_hy <- resample(n_p_ratio, sal_max, method='ngb', progress='text')
 
 # reclassify
-curvel_max_binary <- reclass_data(raster = curvel_max, max_thresh = max_curvel_value, 
-                        one_thresh = TRUE, which_thresh = "MAX")
-curvel_min_binary <- reclass_data(raster = curvel_min, min_thresh = min_curvel_value, 
-                        one_thresh = TRUE, which_thresh = "MIN")
+np_binary <- reclass_data(raster = n_p_ratio_resample_hy, min_thresh = n_p_ratio_min,
+                          max_thresh = n_p_ratio_max, one_thresh = FALSE)
 
-# plot
-plot(curvel_max_binary)
-plot(curvel_min_binary)
-
+# plot reclassified layer
+plot(np_binary)
 ```
+
+
+
 
 
 ### Final Maps
@@ -199,10 +186,8 @@ suitable_areas <- raster::overlay(np_binary,
                                   max_sst_binary,
                                   min_sst_binary, 
                                   sal_max_binary, 
-                                  sal_min_binary, 
-                                  curvel_max_binary, 
-                                  curvel_min_binary,
-                          fun = function(a, b, c, d, e, f, g, h){a*b*c*d*e*f*g*h})
+                                  sal_min_binary,
+                          fun = function(a, b, c, d, e, f){a*b*c*d*e*f})
 # zoom in to see
 suitable_zoom <- crop(suitable_areas, extent(-100, -80, 22, 35))
 
@@ -213,8 +198,6 @@ map('world',fill=T,add=T,col='gray')
 
 
 ```
-
-
 
 ```{r}
 ### save the map ###
@@ -232,49 +215,26 @@ save_map(png_name = "sargassum_suitable.png", title = "Sargassum Suitability",
  #        color = "blue")
 ```
 
-
 # Exclusion Layers
 
 ```{r}
 # Marine protected areas
-mpa <- raster(paste0(path,"/mpas_binary.tif"))
+mpa <- raster(paste0(path,"/mpas_binary_hy.tif"))
 
 # Shipping lanes
-shipping_lanes <- raster(paste0(path,"/ship_binary.tif"))
+shipping_lanes <- raster(paste0(path,"/ship_binary_hy.tif"))
 
 # Submarine Cable Areas
-sub_cable_areas <- raster(paste0(path,"/sub_cable_area_binary.tif"))
+sub_cable_areas <- raster(paste0(path,"/sub_cable_area_binary_hy.tif"))
 
 # Pipeline Areas
-pipeline_areas <- raster(paste0(path,"/pipe_binary.tif"))
+pipeline_areas <- raster(paste0(path,"/pipe_binary_hy.tif"))
 
 # Military danger zones
-military_danger <- raster(paste0(path,"/danger_binary.tif"))
+military_danger <- raster(paste0(path,"/danger_binary_hy.tif"))
 
 # Oil and Gas platforms
-oil_gas_platforms <- raster(paste0(path,"/og_binary.tif"))
-
-```
-
-# Eclusion Map
-
-```{r}
-exclusion <- overlay( mpa,
-                      shipping_lanes,
-                      sub_cable_areas,
-                      pipeline_areas,
-                      military_danger,
-                      oil_gas_platforms,
-                      fun = function(a, b, c, d, e, f){a*b*c*d*e*f})
-
-plot(exclusion)
-map('world',fill=T,add=T,col='gray')
-
-# zoom in to see
-exclusion_zoom <- crop(exclusion, extent(-100, -80, 22, 35))
-
-plot(exclusion_zoom)
-map('world',fill=T,add=T,col='gray')
+oil_gas_platforms <- raster(paste0(path,"/og_binary_hy.tif"))
 
 ```
 
@@ -285,13 +245,15 @@ suitable_areas <- overlay(np_binary,
                           depth_binary, 
                           max_sst_binary,
                           min_sst_binary, 
+                          sal_max_binary, 
+                          sal_min_binary,
                           mpa,
                           shipping_lanes,
                           sub_cable_areas,
                           pipeline_areas,
                           military_danger,
                           oil_gas_platforms,
-                          fun = function(a, b, c, d, e, f, g, h, i, j){a*b*c*d*e*f*g*h*i*j})
+                          fun = function(a, b, c, d, e, f, g, h, i, j,  k, l){a*b*c*d*e*f*g*h*i*j*k*l})
 
 plot(suitable_areas)
 map('world',fill=T,add=T,col='gray')
@@ -303,18 +265,3 @@ plot(suitability_zoom)
 map('world',fill=T,add=T,col='gray')
 
 ```
-
-```{r}
-
-# Sargassum
-save_map(raster = suitability_zoom,
-         png_name = "sargassum_sui_excl.png", title = "Sargassum Suitability + Exclusion", 
-         color = "purple")
-
-# Gracilaria
-save_map(raster = suitability_zoom, 
-         png_name = "gracilaria_sui_excl_L.png", title = "Gracilaria Full Suitability Map", 
-         color = "blue")
-
-```
-

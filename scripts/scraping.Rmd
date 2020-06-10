@@ -1,0 +1,174 @@
+---
+title: "Web Scraping"
+author: "AnnaClaire Marley"
+date: "6/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(httr)
+library(raster)
+library(lubridate)
+
+```
+
+This Rmd scrapes data from HYCOM for salinity and SST in the Gulf of Mexico. Data available from HYCOM is at 3 hour time intervals daily for each year. This code:
+
+* Allows your to choose which year of data to extract, the months you want to extract and which hours of the day to extract
+* Creates average monthly minimum and maximum SST and salinity rasters for each year by taking the average of daily minimums and maximums for each month
+
+#### HYCOM Gulf of Mexico 
+
+Scrape netcdf data from "https://www.hycom.org/data/gomu0pt04/expt-50pt1"
+
+```{r}
+
+year_range <- c(2011) # set the year you want to look at
+month_range <- c(1:12) # set the months
+hours = c(0, 3, 6, 9, 12, 15, 18, 21) # set the hours
+
+
+for (year in year_range){
+  
+  for (month in month_range){
+    
+    # get the number of days in each month
+    num_days = days_in_month(as.Date(paste0(year, "-", month, "-01")))
+    
+    # make vectors
+    month_temp_min = c()
+    month_temp_max = c()
+    month_sal_min = c()
+    month_sal_max = c()
+    
+    for (day in 1:num_days) {
+      
+      day_data_temp = c()
+      
+      day_data_sal = c()
+      
+      for (hour in hours) {
+        
+        file_name = sprintf("hycom_gomu_501_%d%02d%02d00_t0%02d.nc", year, month, day, hour)
+       
+        # generate url
+        url = sprintf("http://ncss.hycom.org/thredds/ncss/datasets/GOMu0.04/expt_50.1/data/netcdf/%d/%s?var=salinity&var=water_temp&disableLLSubset=on&disableProjSubset=on&horizStride=1&time_start=%d-%02d-%02dT%02d%%3A00%%3A00Z&time_end=%d-%02d-%02dT%02d%%3A00%%3A00Z&timeStride=1&vertCoord=&accept=netcdf", 
+                      year, file_name, year, month, day, hour, year, month, day, hour) 
+        
+        # response
+        r <- GET(url)
+        
+        # check if any errors, want status code to be 200
+        print(sprintf("File: %s downloaded. Status code: %d", file_name, status_code(r)))
+        
+        if (status_code(r) == 200) {
+        
+        # save file
+        bin <- content(r, "raw")
+        writeBin(bin, sprintf("../data/HYCOM/Year_%d/%s", year, file_name))
+        
+        # extract sea surface temp and salinity
+        sst <- brick(sprintf("../data/HYCOM/Year_%d/%s", year, file_name), varname = "water_temp")
+        salinity <- brick(sprintf("../data/HYCOM/Year_%d/%s", year, file_name), varname = "salinity")
+        
+        # append to vector
+        day_data_temp = c(day_data_temp, sst)
+        day_data_sal = c(day_data_sal, salinity) 
+        
+        
+       
+        }
+      }
+    
+      # stack the days  
+     day_temp_stack <- raster::stack(day_data_temp)
+     
+     day_sal_stack <- raster::stack(day_data_sal)
+      
+     # get min and max raster
+     temp_min <- min(day_temp_stack)
+     temp_max <- max(day_temp_stack)
+     sal_min <- min(day_sal_stack)
+     sal_max <- max(day_sal_stack)
+     
+     # append
+     month_temp_min = c(month_temp_min, temp_min)
+     month_temp_max = c(month_temp_max, temp_max)
+    month_sal_max = c(month_sal_max, sal_max)
+     month_sal_min = c(month_sal_min, sal_min)
+     
+     # delete files
+    
+     folder = sprintf("../data/HYCOM/Year_%d/", year)
+     
+     for (file in list.files(folder, pattern = "*.nc$")) {
+       
+       file.remove(paste0(folder, file))
+       
+     }
+     
+    
+    }  
+    
+    # save files, average monthly rasters
+    month_av_temp_min <- mean(stack(month_temp_min))
+    writeRaster(month_av_temp_min, 
+                sprintf("../data/HYCOM/Year_%d/av_sst_min_%d-%02d.tif", 
+                        year, year, month))
+    
+    month_av_temp_max <- mean(stack(month_temp_max))
+    writeRaster(month_av_temp_max, 
+                sprintf("../data/HYCOM/Year_%d/av_sst_max_%d-%02d.tif", 
+                        year, year, month))
+    
+    month_av_sal_max <- mean(stack(month_sal_max))
+    writeRaster(month_av_sal_max, 
+                sprintf("../data/HYCOM/Year_%d/av_sal_max_%d-%02d.tif", 
+                        year, year, month))
+    
+     month_av_sal_min <- mean(stack(month_sal_min))
+    writeRaster(month_av_sal_min, 
+                sprintf("../data/HYCOM/Year_%d/av_sal_min_%d-%02d.tif", 
+                        year, year, month))
+    
+    
+  
+  }
+  
+  
+}
+print("finish")
+
+```
+
+
+```{r}
+
+x <- raster("../data/HYCOM/av_sst_min_2012-01.tif")
+
+plot(x)
+
+```
+
+
+
+```{r}
+# minimum temperature for each day
+# average minimum monthly temperature
+
+
+
+# for both water temp and sailinty 
+brick("../data/hycom_gomu_501_2012010100_t000.nc", varname = "water_temp")
+
+# then group by day and average for each day then average by month and save that
+
+
+
+```
+
