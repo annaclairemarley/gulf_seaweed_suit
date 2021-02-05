@@ -1,0 +1,11 @@
+---
+title: "Seaweed Data Wrangling"
+author: "Laurel Abowd, Jaleise Hall, Sydney Rilum"
+date: "2/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
