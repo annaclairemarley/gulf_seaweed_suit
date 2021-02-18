@@ -9,3 +9,13 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r}
+# Attach Packages #
+
+library(tidyverse)
+library(raster)
+library(sdmpredictors) # Bio Oracle
+library(leaflet) # Bio Oracle
+library(sf)
+```
+
