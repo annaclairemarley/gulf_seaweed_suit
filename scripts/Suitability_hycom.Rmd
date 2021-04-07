@@ -15,8 +15,11 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(raster)
 library(sdmpredictors)
-```
+library(sf)
+library(maps)
 
+```
+Green is sargassum purple is gracillaria
 
 # Suitability 
 
@@ -31,9 +34,13 @@ library(sdmpredictors)
 - Optimal sea surface temp: 18-30°C
 - Optimal salinity: 24-42 psu
 
-*Euchema* specific:
+*Euchema* (old) specific:
 - Optimal sea surface temp: 25-30°C
 - Optimal salinity: 28-34 psu
+
+*Euchema* (Phoebe) specific:
+- Optimal sea surface temp: 18-30°C
+- Optimal salinity: 30-40 psu
 
 *Gracilaria* specific:
 - Optimal sea surface temp: 15-30°C
@@ -43,6 +50,8 @@ library(sdmpredictors)
 - Optimal sea surface temp: 20-30°C
 - Optimal salinity: 25-40 psu
 - Current velocity: 0.05-0.5 m/s
+
+
 
 **Seaweed Parameters**
 ```{r}
@@ -55,22 +64,31 @@ n_p_ratio_min <- 4
 n_p_ratio_max <- 80
 
 # sea surface temperature
-min_sst_value <- 20
+min_sst_value <- 18
 max_sst_value <- 30
 
 # salinity
-min_sal_value <- 25
+min_sal_value <- 30
 max_sal_value <- 40
 
 # current velocity
-min_curvel_value <- 0.1
-max_curvel_value <- 1
+# min_curvel_value <- 0.1
+# max_curvel_value <- 1
 
 ```
 
 ```{r}
 # set up path to load activate layers
 path <- "../data/Active_Data_Layers/"
+```
+
+```{r}
+# load function to relcassify rasters
+source('../functions/reclass_data.R')
+```
+
+```{r}
+eez_gulf <- read_sf(path, layer = "eez_gulf")
 ```
 
 
@@ -94,15 +112,12 @@ plot(depth_binary)
 
 ```
 
-```{r}
-# load function to relcassify rasters
-source('../functions/reclass_data.R')
-```
 
 Max SST
 ```{r}
 # read in raster
-max_sst <- raster(paste0(path,"/max_sst_hy_an_mask.tif"))
+max_sst <- raster(paste0(path,"/max_sst_hy_10_12.tif"))
+
 
 # reclassify
 max_sst_binary <- reclass_data(raster = max_sst, max_thresh = max_sst_value, 
@@ -118,7 +133,7 @@ plot(max_sst_binary)
 Min SST
 ```{r}
 # read in raster
-min_sst <- raster(paste0(path,"/min_sst_hy_an_mask.tif"))
+min_sst <- raster(paste0(path,"/min_sst_hy_10_12.tif"))
 
 plot(min_sst)
 
@@ -129,15 +144,18 @@ min_sst_binary <- reclass_data(raster = min_sst, min_thresh = min_sst_value,
 
 # plot reclassified layer
 plot(min_sst_binary)
+summary(min_sst)
 
 ```
 
 Salinity
 ```{r}
 # read in files
-sal_max <- raster(paste0(path,"/min_sal_hy_an_mask.tif"))
-sal_min <- raster(paste0(path,"/min_sal_hy_an_mask.tif"))
+sal_max <- raster(paste0(path,"/max_sal_hy_10_12.tif"))
+sal_min <- raster(paste0(path,"/min_sal_hy_10_12.tif"))
 
+plot(sal_min)
+plot(sal_max)
 
 # reclassify
 sal_max_binary <- reclass_data(raster = sal_max, max_thresh = max_sal_value, 
@@ -150,6 +168,17 @@ plot(sal_max_binary)
 plot(sal_min_binary)
 
 ```
+
+```{r,echo = FALSE}
+plot(depth_binary)
+plot(max_sst_binary)
+plot(min_sst_binary)
+plot(sal_max_binary)
+plot(sal_min_binary)
+```
+
+
+
 
 N:P ratio
 ```{r}
@@ -188,13 +217,27 @@ suitable_areas <- raster::overlay(np_binary,
                                   sal_max_binary, 
                                   sal_min_binary,
                           fun = function(a, b, c, d, e, f){a*b*c*d*e*f})
+
+suitable_areas <- raster::overlay(
+                                  depth_binary, 
+                                  max_sst_binary,
+                                  min_sst_binary, 
+                                  sal_max_binary, 
+                                  sal_min_binary,
+                          fun = function(a, b, c, d, e){a*b*c*d*e})
+
+
+suit_area <- tapply(area(suitable_areas), suitable_areas[], sum)
+
 # zoom in to see
 suitable_zoom <- crop(suitable_areas, extent(-100, -80, 22, 35))
 
 
 # plot
-plot(suitable_zoom)
+plot(suitable_zoom, legend = FALSE, col = c("white", "paleturquoise4"))
+plot(eez_gulf$geometry, add = T, lty=2)
 map('world',fill=T,add=T,col='gray')
+map('state',fill=F,add=T)
 
 
 ```
@@ -205,14 +248,14 @@ map('world',fill=T,add=T,col='gray')
 #         color = "light blue")
 
 # sargassum
-save_map(png_name = "sargassum_suitable.png", title = "Sargassum Suitability", 
-         color = "purple")
+#save_map(png_name = "sargassum_suitable_v6.png", title = "Sargassum Suitability", 
+ #        color = "dark green")
 # Euchema
 #save_map(png_name = "euchema_suitable.png", title = "Euchema Suitability", 
 #         color = "green")
 # Gracilaria
-#save_map(png_name = "gracilaria_suitable_L.png", title = "Gracilaria Suitability", 
- #        color = "blue")
+#save_map(png_name = "gracilaria_suitable_v2.png", title = "Gracilaria Suitability", 
+ #        color = "purple")
 ```
 
 # Exclusion Layers
@@ -241,6 +284,15 @@ oil_gas_platforms <- raster(paste0(path,"/og_binary_hy.tif"))
 # Final Suitability Map
 ```{r}
 
+exclusion_areas <- overlay(
+                          mpa,
+                          shipping_lanes,
+                          sub_cable_areas,
+                          pipeline_areas,
+                          military_danger,
+                          oil_gas_platforms,
+                          fun = function(a, b, c, d, e, f){a*b*c*d*e*f})
+
 suitable_areas <- overlay(np_binary, 
                           depth_binary, 
                           max_sst_binary,
@@ -257,11 +309,16 @@ suitable_areas <- overlay(np_binary,
 
 plot(suitable_areas)
 map('world',fill=T,add=T,col='gray')
+map('state',fill=F,add=T)
+
+suit_exclus_area <- tapply(area(suitable_areas), suitable_areas[], sum)
 
 # zoom in to see
-suitability_zoom <- crop(suitable_areas, extent(-100, -80, 22, 35))
+exclusion_zoom <- crop(suitable_areas, extent(-100, -80, 22, 35))
 
-plot(suitability_zoom)
+plot(exclusion_zoom, legend = FALSE, col = c("white", "paleturquoise4"))
+plot(eez_gulf$geometry, add = T, lty=2)
 map('world',fill=T,add=T,col='gray')
+map('state',fill=F,add=T)
 
 ```

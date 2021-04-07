@@ -83,6 +83,9 @@ plot(eez_gulf$geometry)
 # create new polygon of the eez that only counts as gulf area 
 eez_gulf <- st_intersection(gulf_area_reproject, eez_gulf)
 plot(eez_gulf$geometry)
+
+write_sf(eez_gulf, paste0(path, "eez_gulf.shp"))
+
 ```
 
 # Suitability Layers
@@ -96,7 +99,8 @@ plot(eez_gulf$geometry)
 
 # Explore layers in a dataset 
 list <- list_layers() %>% 
-  filter(dataset_code == "Bio-ORACLE")
+  filter(dataset_code == "Bio-ORACLE") %>% 
+  filter(layer_code == "BO2_phosphatemean_ss")
 
 list_layers(datasets)
 
@@ -253,26 +257,29 @@ writeRaster(curvel_max_mask, paste0(path, "curvel_max_mask.tif"), overwrite = T)
 #### Sea surface temperature
 
 ```{r}
+path_hycom <- "../data/HYCOM/Year_2011/" # change year depending on which year you want to dowload
+
 # max sst
-max_sst_hycom <- list.files("../data/HYCOM/Year_2012/", pattern = "av_sst_max*")
-max_sst_hy_stack <- raster::stack(paste0("../data/HYCOM/Year_2012/", max_sst_hycom))
+max_sst_hycom <- list.files(path_hycom, pattern = "av_sst_max*") # run this for each new year
+max_sst_hy_stack <- raster::stack(paste0(path_hycom, max_sst_hycom))
 
 # min sst
-min_sst_hycom <- list.files("../data/HYCOM/Year_2012/", pattern = "av_sst_min*")
-min_sst_hy_stack <- raster::stack(paste0("../data/HYCOM/Year_2012/", min_sst_hycom))
+min_sst_hycom <- list.files(path_hycom, pattern = "av_sst_min*") # run this for each new year
+min_sst_hy_stack <- raster::stack(paste0(path_hycom, min_sst_hycom))
 
 ```
 
 ##### Annual SST
 ```{r}
-# annual average maximum sst
+# average annual maximum sst
 max_sst_hy_an <- mean(max_sst_hy_stack)
+plot(max_sst_hy_an)
 
 # process and plot
 max_sst_hy_an_mask <- process_bo_data(max_sst_hy_an)
 plot(max_sst_hy_an_mask)
 
-# annual average minimum sst
+# average annual minimum sst
 min_sst_hy_an <- mean(min_sst_hy_stack)
 
 # process and plot
@@ -280,9 +287,28 @@ min_sst_hy_an_mask <- process_bo_data(min_sst_hy_an)
 plot(min_sst_hy_an_mask)
 
 # write to file
-writeRaster(max_sst_hy_an_mask, paste0(path, "max_sst_hy_an_mask.tif"), overwrite = T)
-writeRaster(min_sst_hy_an_mask, paste0(path, "min_sst_hy_an_mask.tif"), overwrite = T)
+writeRaster(max_sst_hy_an_mask, paste0(path, "max_sst_hy_an_mask_2011.tif"), overwrite = T)
+writeRaster(min_sst_hy_an_mask, paste0(path, "min_sst_hy_an_mask_2011.tif"), overwrite = T)
+
 ```
+
+```{r}
+# combine multiple years to get mean 2010-2012
+path_al <- "../data/Active_Data_Layers/"
+  # max sst
+  max_sst_hycom_yrs <- list.files(path_al, pattern = "max_sst_hy_an_mask*") # run this for each new year
+  max_sst_hy_yrs_stack <- raster::stack(paste0(path_al, max_sst_hycom_yrs))
+  max_sst_hy_10_12 <- mean(max_sst_hy_yrs_stack)
+  # min sst
+  min_sst_hycom_yrs <- list.files(path_al, pattern = "min_sst_hy_an_mask*") # run this for each new year
+  min_sst_hy_yrs_stack <- raster::stack(paste0(path_al, min_sst_hycom_yrs))
+  min_sst_hy_10_12 <- mean(min_sst_hy_yrs_stack)
+  
+# write to file
+writeRaster(max_sst_hy_10_12, paste0(path, "max_sst_hy_10_12.tif"), overwrite = T)
+writeRaster(min_sst_hy_10_12, paste0(path, "min_sst_hy_10_12.tif"), overwrite = T)
+```
+
 
 Create an Empty Raster Using min SST as a Template
 ```{r}
@@ -295,15 +321,20 @@ empty_raster <- reclassify(min_sst_hy_an_mask, rcl= rcl_matrix)
 ```
 
 #### Salinity
-```{r}
-# max salinity
-max_sal_hycom <- list.files("../data/HYCOM/Year_2012/", pattern = "av_sal_max*")
-max_sal_hy_stack <- raster::stack(paste0("../data/HYCOM/Year_2012/", max_sal_hycom))
 
-# min salinity
-min_sal_hycom <- list.files("../data/HYCOM/Year_2012/", pattern = "av_sal_min*")
-min_sal_hy_stack <- raster::stack(paste0("../data/HYCOM/Year_2012/", min_sal_hycom))
+```{r}
+path_hycom <- "../data/HYCOM/Year_2012/" # change year depending on which year you want to dowload
+
+# max sst
+max_sal_hycom <- list.files(path_hycom, pattern = "av_sal_max*") # run this for each new year
+max_sal_hy_stack <- raster::stack(paste0(path_hycom, max_sal_hycom))
+
+# min sst
+min_sal_hycom <- list.files(path_hycom, pattern = "av_sal_min*") # run this for each new year
+min_sal_hy_stack <- raster::stack(paste0(path_hycom, min_sal_hycom))
+
 ```
+
 
 ##### Annual salinity
 
@@ -323,9 +354,27 @@ min_sal_hy_an_mask <- process_bo_data(min_sal_hy_an)
 plot(min_sal_hy_an_mask)
 
 # write to file
-writeRaster(max_sal_hy_an_mask, paste0(path, "max_sal_hy_an_mask.tif"), overwrite = T)
-writeRaster(min_sal_hy_an_mask, paste0(path, "min_sal_hy_an_mask.tif"), overwrite = T)
+writeRaster(max_sal_hy_an_mask, paste0(path, "max_sal_hy_an_mask_2012.tif"), overwrite = T)
+writeRaster(min_sal_hy_an_mask, paste0(path, "min_sal_hy_an_mask_2012.tif"), overwrite = T)
 ```
+
+```{r}
+# combine multiple years to get mean 2010-2012
+path_al <- "../data/Active_Data_Layers/"
+  # max salinity
+  max_sal_hycom_yrs <- list.files(path_al, pattern = "max_sal_hy_an_mask*") # run this for each new year
+  max_sal_hy_yrs_stack <- raster::stack(paste0(path_al, max_sal_hycom_yrs))
+  max_sal_hy_10_12 <- mean(max_sal_hy_yrs_stack)
+  # min salinity
+  min_sal_hycom_yrs <- list.files(path_al, pattern = "min_sal_hy_an_mask*") # run this for each new year
+  min_sal_hy_yrs_stack <- raster::stack(paste0(path_al, min_sal_hycom_yrs))
+  min_sal_hy_10_12 <- mean(min_sal_hy_yrs_stack)
+  
+# write to file
+writeRaster(max_sal_hy_10_12, paste0(path, "max_sal_hy_10_12.tif"), overwrite = T)
+writeRaster(min_sal_hy_10_12, paste0(path, "min_sal_hy_10_12.tif"), overwrite = T)
+```
+
 
 ### GEBCO 
 
@@ -632,24 +681,6 @@ plot(artificial_reefs)
 ```
 
 
-Make initial map with vector data to see layers
-```{r}
-# map of gulf
-gulf_base <- us %>% 
-  ggplot() +
-  geom_sf() +
-  geom_sf(data = states) +
-  geom_sf(data = eez_gulf) +
-  geom_sf(data = artificial_reefs) +
-  coord_sf(xlim = c(-102.15, -74.12), ylim = c(20.65, 33.97), expand = FALSE) +
-  scale_fill_viridis_d(option = "plasma") +
-  theme(legend.position = "none", 
-        axis.title.x = element_blank(), 
-        axis.title.y = element_blank(), 
-        panel.background = element_rect(fill = "azure"), 
-        panel.border = element_rect(fill = NA)) 
 
-gulf_base
-```
 
 

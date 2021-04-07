@@ -29,114 +29,122 @@ Scrape netcdf data from "https://www.hycom.org/data/gomu0pt04/expt-50pt1"
 ```{r}
 
 year_range <- c(2011) # set the year you want to look at
-month_range <- c(1:12) # set the months
+month_range <- c(5) # set the months
 hours = c(0, 3, 6, 9, 12, 15, 18, 21) # set the hours
 
 
 for (year in year_range){
+  folder = sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/", year)
+  dir.create(folder, showWarnings = FALSE)
   
   for (month in month_range){
     
-    # get the number of days in each month
-    num_days = days_in_month(as.Date(paste0(year, "-", month, "-01")))
+    av_temp_min_raster_file = sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/av_sst_min_%d-%02d.tif", year, year, month)
+    av_temp_max_raster_file = sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/av_sst_max_%d-%02d.tif", year, year, month)
+    av_sal_max_file = sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/av_sal_max_%d-%02d.tif", year, year, month)
+    av_sal_min_file = sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/av_sal_min_%d-%02d.tif", year, year, month)
     
-    # make vectors
-    month_temp_min = c()
-    month_temp_max = c()
-    month_sal_min = c()
-    month_sal_max = c()
-    
-    for (day in 1:num_days) {
+    if (!(file.exists(av_temp_min_raster_file) && file.exists(av_temp_max_raster_file) && file.exists(av_sal_max_file) && file.exists(av_sal_min_file))) {
+      # get the number of days in each month
+      num_days = days_in_month(as.Date(paste0(year, "-", month, "-01")))
       
-      day_data_temp = c()
+      # make vectors
+      month_temp_min = c()
+      month_temp_max = c()
+      month_sal_min = c()
+      month_sal_max = c()
       
-      day_data_sal = c()
-      
-      for (hour in hours) {
+      for (day in 1:num_days) {
         
-        file_name = sprintf("hycom_gomu_501_%d%02d%02d00_t0%02d.nc", year, month, day, hour)
-       
-        # generate url
-        url = sprintf("http://ncss.hycom.org/thredds/ncss/datasets/GOMu0.04/expt_50.1/data/netcdf/%d/%s?var=salinity&var=water_temp&disableLLSubset=on&disableProjSubset=on&horizStride=1&time_start=%d-%02d-%02dT%02d%%3A00%%3A00Z&time_end=%d-%02d-%02dT%02d%%3A00%%3A00Z&timeStride=1&vertCoord=&accept=netcdf", 
-                      year, file_name, year, month, day, hour, year, month, day, hour) 
+        day_data_temp = c()
         
-        # response
-        r <- GET(url)
+        day_data_sal = c()
         
-        # check if any errors, want status code to be 200
-        print(sprintf("File: %s downloaded. Status code: %d", file_name, status_code(r)))
-        
-        if (status_code(r) == 200) {
-        
-        # save file
-        bin <- content(r, "raw")
-        writeBin(bin, sprintf("../data/HYCOM/Year_%d/%s", year, file_name))
-        
-        # extract sea surface temp and salinity
-        sst <- brick(sprintf("../data/HYCOM/Year_%d/%s", year, file_name), varname = "water_temp")
-        salinity <- brick(sprintf("../data/HYCOM/Year_%d/%s", year, file_name), varname = "salinity")
-        
-        # append to vector
-        day_data_temp = c(day_data_temp, sst)
-        day_data_sal = c(day_data_sal, salinity) 
-        
-        
-       
+        for (hour in hours) {
+          
+          file_name = sprintf("hycom_gomu_501_%d%02d%02d00_t0%02d.nc", year, month, day, hour)
+          file_path = sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/%s", year, file_name)
+          downloaded = TRUE
+          if (!file.exists(file_path)) {
+            downloaded = FALSE
+            url = sprintf("http://ncss.hycom.org/thredds/ncss/datasets/GOMu0.04/expt_50.1/data/netcdf/%d/%s?var=salinity&var=water_temp&disableLLSubset=on&disableProjSubset=on&horizStride=1&time_start=%d-%02d-%02dT%02d%%3A00%%3A00Z&time_end=%d-%02d-%02dT%02d%%3A00%%3A00Z&timeStride=1&vertCoord=&accept=netcdf", 
+                        year, file_name, year, month, day, hour, year, month, day, hour) 
+          
+          # response
+            r <- GET(url)
+            
+            # check if any errors, want status code to be 200
+            print(sprintf("File: %s downloaded. Status code: %d", file_name, status_code(r)))
+            
+            if (status_code(r) == 200) {
+            
+            # save file
+              bin <- content(r, "raw")
+              writeBin(bin, sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/%s", year, file_name))
+              downloaded = TRUE
+            }
+          }
+          # generate url
+          
+          if (downloaded) {
+            # extract sea surface temp and salinity
+            sst <- brick(sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/%s", year, file_name), varname = "water_temp")
+            salinity <- brick(sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/%s", year, file_name), varname = "salinity")
+            
+            # append to vector
+            day_data_temp = c(day_data_temp, sst)
+            day_data_sal = c(day_data_sal, salinity) 
+          }
+          
         }
-      }
-    
-      # stack the days  
-     day_temp_stack <- raster::stack(day_data_temp)
-     
-     day_sal_stack <- raster::stack(day_data_sal)
       
-     # get min and max raster
-     temp_min <- min(day_temp_stack)
-     temp_max <- max(day_temp_stack)
-     sal_min <- min(day_sal_stack)
-     sal_max <- max(day_sal_stack)
-     
-     # append
-     month_temp_min = c(month_temp_min, temp_min)
-     month_temp_max = c(month_temp_max, temp_max)
-    month_sal_max = c(month_sal_max, sal_max)
-     month_sal_min = c(month_sal_min, sal_min)
-     
-     # delete files
-    
-     folder = sprintf("../data/HYCOM/Year_%d/", year)
-     
-     for (file in list.files(folder, pattern = "*.nc$")) {
+        # stack the days  
+       day_temp_stack <- raster::stack(day_data_temp)
+       
+       day_sal_stack <- raster::stack(day_data_sal)
+        
+       # get min and max raster
+       temp_min <- min(day_temp_stack)
+       temp_max <- max(day_temp_stack)
+       sal_min <- min(day_sal_stack)
+       sal_max <- max(day_sal_stack)
+       
+       # append
+       month_temp_min = c(month_temp_min, temp_min)
+       month_temp_max = c(month_temp_max, temp_max)
+       month_sal_max = c(month_sal_max, sal_max)
+       month_sal_min = c(month_sal_min, sal_min)
+       
+      }  
+      
+      
+      # save files, average monthly rasters
+      month_av_temp_min <- mean(stack(month_temp_min))
+      writeRaster(month_av_temp_min, 
+                  sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/av_sst_min_%d-%02d.tif", 
+                          year, year, month))
+      
+      month_av_temp_max <- mean(stack(month_temp_max))
+      writeRaster(month_av_temp_max, 
+                  sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/av_sst_max_%d-%02d.tif", 
+                          year, year, month))
+      
+      month_av_sal_max <- mean(stack(month_sal_max))
+      writeRaster(month_av_sal_max, 
+                  sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/av_sal_max_%d-%02d.tif", 
+                          year, year, month))
+      
+       month_av_sal_min <- mean(stack(month_sal_min))
+      writeRaster(month_av_sal_min, 
+                  sprintf("/Users/annaclairemarley/Documents/github/gulf_seaweed_suit/data/HYCOM/Year_%d/av_sal_min_%d-%02d.tif", 
+                          year, year, month))
+    }
+    # delete files
+    for (file in list.files(folder, pattern = sprintf(".*%d%02d.*.nc$", year, month))) {
        
        file.remove(paste0(folder, file))
        
      }
-     
-    
-    }  
-    
-    # save files, average monthly rasters
-    month_av_temp_min <- mean(stack(month_temp_min))
-    writeRaster(month_av_temp_min, 
-                sprintf("../data/HYCOM/Year_%d/av_sst_min_%d-%02d.tif", 
-                        year, year, month))
-    
-    month_av_temp_max <- mean(stack(month_temp_max))
-    writeRaster(month_av_temp_max, 
-                sprintf("../data/HYCOM/Year_%d/av_sst_max_%d-%02d.tif", 
-                        year, year, month))
-    
-    month_av_sal_max <- mean(stack(month_sal_max))
-    writeRaster(month_av_sal_max, 
-                sprintf("../data/HYCOM/Year_%d/av_sal_max_%d-%02d.tif", 
-                        year, year, month))
-    
-     month_av_sal_min <- mean(stack(month_sal_min))
-    writeRaster(month_av_sal_min, 
-                sprintf("../data/HYCOM/Year_%d/av_sal_min_%d-%02d.tif", 
-                        year, year, month))
-    
-    
   
   }
   
